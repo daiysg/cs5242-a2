@@ -37,7 +37,7 @@ class RNNCell(Layer):
         """
         #############################################################
         # code here
-        outputs = np.tanh(np.dot(inputs.prev_h, self.kernel) + np.dot(inputs.x, self.recurrent_kernel) + self.bias)
+        outputs = np.tanh(np.dot(inputs[1], self.recurrent_kernel) + np.dot(inputs[0], self.kernel) + self.bias)
         #############################################################
         return outputs
 
@@ -54,10 +54,14 @@ class RNNCell(Layer):
         """
         #############################################################
         # code here
+
+
+        outputs = np.tanh(np.dot(inputs[1], self.recurrent_kernel) + np.dot(inputs[0], self.kernel) + self.bias)
+        in_grads = in_grads * (1 - outputs ** 2)
         out_grads_h = np.dot(in_grads, self.recurrent_kernel.T)
         dx = np.dot(in_grads, self.kernel.T)
-        self.r_kernel_grad = np.dot(inputs.prev_h.T, in_grads)
-        self.kernel_grad = np.dot(inputs.x.T, in_grads)
+        self.r_kernel_grad = np.dot(inputs[1].T, in_grads)
+        self.kernel_grad = np.dot(inputs[0].T, in_grads)
         self.b_grad = np.sum(in_grads, axis=0)
         out_grads = [dx, out_grads_h]
     #############################################################
@@ -135,15 +139,21 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        batch, units = self.h0.shape
+        units = self.h0.shape[0]
         batch, time_steps, in_features = inputs.shape
-        outputs = np.zeros((batch, time_steps, units))
+        outputs = np.zeros(shape=(batch, time_steps, units))
 
         for cur_time in range(time_steps):
             if cur_time == 0:
-                outputs[:, cur_time, :] = self.cell.forward(inputs[:, cur_time, :], self.h0, self.kernel, self.recurrent_kernel, self.bias)
+                outputs[:, cur_time, :] = self.cell.forward([inputs[:, cur_time, :], self.h0])
+                self.kernel = self.cell.kernel
+                self.recurrent_kernel = self.cell.recurrent_kernel
+                self.bias = self.cell.bias
             else:
-                outputs[:, cur_time, :] = self.cell.forward(inputs[:, cur_time, :], outputs[:, cur_time - 1, :], self.kernel, self.recurrent_kernel, self.bias)
+                outputs[:, cur_time, :] = self.cell.forward([inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
+                self.kernel = self.cell.kernel
+                self.recurrent_kernel = self.cell.recurrent_kernel
+                self.bias = self.cell.bias
         #############################################################
         return outputs
 
@@ -165,7 +175,11 @@ class RNN(Layer):
 
         dh_t = 0
         for t in reversed(range(time_steps)):
-            out_grads[:, t, :] = self.cell.backward(in_grads[:, t, :] + dh_t)
+            out_grads[:, t, :], dh_t = self.cell.backward(in_grads[:, t, :] + dh_t, inputs)
+            self.kernel_grad += self.cell.kernel_grad
+            self.r_kernel_grad += self.cell.r_kernel_grad
+            self.b_grad += self.cell.b_grad
+
         #############################################################
         return out_grads
 
@@ -277,7 +291,7 @@ class BidirectionalRNN(Layer):
         # code here
         raise NotImplementedError
         #############################################################
-        return out_grads
+        return dh
 
     def update(self, params):
         """Update parameters with new params
