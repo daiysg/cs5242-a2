@@ -135,16 +135,15 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        N, H = self.h0.shape
-        _, T, D = inputs.shape
-        outputs = np.zeros((N, T, H))
+        batch, units = self.h0.shape
+        batch, time_steps, in_features = inputs.shape
+        outputs = np.zeros((batch, time_steps, units))
 
-        for t in range(T):
-            if t == 0:
-                outputs[:, t, :] = self.cell.forward(inputs[:, t, :], self.h0, self.kernel, self.recurrent_kernel, self.bias)
+        for cur_time in range(time_steps):
+            if cur_time == 0:
+                outputs[:, cur_time, :] = self.cell.forward(inputs[:, cur_time, :], self.h0, self.kernel, self.recurrent_kernel, self.bias)
             else:
-                outputs[:, t, :] = self.cell.forward(inputs[:, t, :], outputs[:, t - 1, :],
-                                                     self.kernel, self.recurrent_kernel, self.bias)
+                outputs[:, cur_time, :] = self.cell.forward(inputs[:, cur_time, :], outputs[:, cur_time - 1, :], self.kernel, self.recurrent_kernel, self.bias)
         #############################################################
         return outputs
 
@@ -159,7 +158,14 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        raise NotImplementedError
+        batch, time_steps, units = in_grads.shape
+        _, _, in_features = inputs.shape
+
+        out_grads = np.zeros((batch, time_steps, in_features))
+
+        dh_t = 0
+        for t in reversed(range(time_steps)):
+            out_grads[:, t, :] = self.cell.backward(in_grads[:, t, :] + dh_t)
         #############################################################
         return out_grads
 
