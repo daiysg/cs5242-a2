@@ -37,6 +37,7 @@ class RNNCell(Layer):
         """
         #############################################################
         # code here
+        inputs[0][np.isnan(inputs[0])] = 0
         outputs = np.tanh(np.dot(inputs[1], self.recurrent_kernel) + np.dot(inputs[0], self.kernel) + self.bias)
         #############################################################
         return outputs
@@ -54,8 +55,7 @@ class RNNCell(Layer):
         """
         #############################################################
         # code here
-
-
+        inputs[0][np.isnan(inputs[0])] = 0
         outputs = np.tanh(np.dot(inputs[1], self.recurrent_kernel) + np.dot(inputs[0], self.kernel) + self.bias)
         in_grads = in_grads * (1 - outputs ** 2)
         out_grads_h = np.dot(in_grads, self.recurrent_kernel.T)
@@ -174,8 +174,27 @@ class RNN(Layer):
         out_grads = np.zeros((batch, time_steps, in_features))
 
         dh_t = 0
-        for t in reversed(range(time_steps)):
-            out_grads[:, t, :], dh_t = self.cell.backward(in_grads[:, t, :] + dh_t, inputs)
+
+        # code here
+        units = self.h0.shape[0]
+        batch, time_steps, in_features = inputs.shape
+        outputs = np.zeros(shape=(batch, time_steps, units))
+
+        for cur_time in range(time_steps):
+            if cur_time == 0:
+                outputs[:, cur_time, :] = self.cell.forward([inputs[:, cur_time, :], self.h0])
+                self.kernel = self.cell.kernel
+                self.recurrent_kernel = self.cell.recurrent_kernel
+                self.bias = self.cell.bias
+            else:
+                outputs[:, cur_time, :] = self.cell.forward([inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
+                self.kernel = self.cell.kernel
+                self.recurrent_kernel = self.cell.recurrent_kernel
+                self.bias = self.cell.bias
+
+
+        for cur_time in reversed(range(1, time_steps)):
+            out_grads[:, cur_time - 1 , :], dh_t = self.cell.backward(in_grads[:, cur_time - 1, :] + dh_t, [inputs[:, cur_time - 1, :], outputs[:, cur_time, :]])
             self.kernel_grad += self.cell.kernel_grad
             self.r_kernel_grad += self.cell.r_kernel_grad
             self.b_grad += self.cell.b_grad
