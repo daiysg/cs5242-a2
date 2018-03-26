@@ -54,13 +54,12 @@ class RNNCell(Layer):
         """
         #############################################################
         # code here
-        dnext_h = in_grads * (1 - in_grads ** 2)
-        dprex_h = np.dot(dnext_h, self.r_kernel_grad.T)
-        dx = np.dot(dnext_h, self.kernel.T)
-        self.r_kernel_grad = np.dot(inputs.prev_h.T, dnext_h)
-        self.kernel_grad = np.dot(inputs.x.T, dnext_h)
-        self.b_grad = np.sum(dnext_h, axis=0)
-        out_grads = [dx, dprex_h]
+        out_grads_h = np.dot(in_grads, self.recurrent_kernel.T)
+        dx = np.dot(in_grads, self.kernel.T)
+        self.r_kernel_grad = np.dot(inputs.prev_h.T, in_grads)
+        self.kernel_grad = np.dot(inputs.x.T, in_grads)
+        self.b_grad = np.sum(in_grads, axis=0)
+        out_grads = [dx, out_grads_h]
     #############################################################
         return out_grads
 
@@ -136,7 +135,16 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        raise NotImplementedError
+        N, H = self.h0.shape
+        _, T, D = inputs.shape
+        outputs = np.zeros((N, T, H))
+
+        for t in range(T):
+            if t == 0:
+                outputs[:, t, :] = self.cell.forward(inputs[:, t, :], self.h0, self.kernel, self.recurrent_kernel, self.bias)
+            else:
+                outputs[:, t, :] = self.cell.forward(inputs[:, t, :], outputs[:, t - 1, :],
+                                                     self.kernel, self.recurrent_kernel, self.bias)
         #############################################################
         return outputs
 
