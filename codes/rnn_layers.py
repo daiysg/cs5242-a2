@@ -295,9 +295,16 @@ class BidirectionalRNN(Layer):
         """
         #############################################################
         # code here
-        raise NotImplementedError
+        mask = ~np.any(np.isnan(inputs), axis=2)
+        batch, time_stamp, double_unit = in_grads.shape
+        unit = int(double_unit / 2)
+        in_grads_array = np.reshape(in_grads,  batch * time_stamp * double_unit)
+        [in_grads_forward, in_grads_backward] = np.split(in_grads_array, 2)
+
+        forward_outputs = self.forward_rnn.backward(in_grads_forward.reshape(batch, time_stamp, unit), inputs)
+        backward_outputs = self.backward_rnn.backward(self._reverse_temporal_data(in_grads_backward.reshape(batch, time_stamp, unit), mask), inputs)
         #############################################################
-        return in_grads
+        return forward_outputs
 
     def update(self, params):
         """Update parameters with new params
