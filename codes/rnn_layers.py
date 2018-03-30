@@ -36,12 +36,10 @@ class RNNCell(Layer):
             outputs: numpy array with shape (batch, units)
         """
         #############################################################
-        # code here
-        print(inputs)
+        # code here)
         inputs[0][np.isnan(inputs[0])] = 0
-        outputs = np.tanh(np.dot(inputs[1], self.recurrent_kernel) + np.dot(inputs[0], self.kernel) + self.bias)
-        print("hehehehehe")
-        print(outputs)
+        affine_output = inputs[1].dot(self.recurrent_kernel) + inputs[0].dot( self.kernel) + self.bias
+        outputs = np.tanh(affine_output)
         #############################################################
         return outputs
 
@@ -142,7 +140,11 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        units = self.h0.shape[0]
+        units = 0
+        if self.h0.ndim == 1:
+            units = self.h0.shape[0]
+        else:
+            _, units = self.h0.shape
         batch, time_steps, in_features = inputs.shape
         outputs = np.zeros(shape=(batch, time_steps, units))
 
@@ -174,12 +176,12 @@ class RNN(Layer):
 
         out_grads = np.zeros((batch, time_steps, in_features))
 
-        dh_t = 0
+        dh_prev = np.zeros((batch, units))
         outputs = self.forward(inputs)
         for cur_time in reversed(range(time_steps)):
-            result = self.cell.backward(in_grads[:, cur_time, :] + dh_t, [inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
+            result = self.cell.backward(in_grads[:, cur_time, :] + dh_prev, [inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
             out_grads[:, cur_time, :] = result[0]
-            dh_t = result[1]
+            dh_prev = result[1]
             self.kernel_grad += self.cell.kernel_grad
             self.r_kernel_grad += self.cell.r_kernel_grad
             self.b_grad += self.cell.b_grad
