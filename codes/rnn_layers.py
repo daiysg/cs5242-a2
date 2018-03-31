@@ -36,8 +36,7 @@ class RNNCell(Layer):
             outputs: numpy array with shape (batch, units)
         """
         #############################################################
-        # code here)
-        inputs[0][np.isnan(inputs[0])] = 0
+        # code here
         affine_output = inputs[1].dot(self.recurrent_kernel) + inputs[0].dot( self.kernel) + self.bias
         outputs = np.tanh(affine_output)
         #############################################################
@@ -56,13 +55,14 @@ class RNNCell(Layer):
         """
         #############################################################
         # code here
-        outputs = self.forward(inputs)
 
-        in_grads = in_grads * (1 - outputs ** 2)
+        outputs = self.forward(inputs)
+        in_grads = np.nan_to_num(in_grads * (1 - outputs ** 2))
         out_grads_h = np.dot(in_grads, self.recurrent_kernel.T)
         dx = np.dot(in_grads, self.kernel.T)
+        x_nan_to_num = np.nan_to_num(inputs[0])
         self.r_kernel_grad = np.dot(inputs[1].T, in_grads)
-        self.kernel_grad = np.dot(inputs[0].T, in_grads)
+        self.kernel_grad = np.dot(x_nan_to_num.T, in_grads)
         self.b_grad = np.sum(in_grads, axis=0)
         out_grads = [dx, out_grads_h]
     #############################################################
@@ -140,7 +140,6 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        units = 0
         if self.h0.ndim == 1:
             units = self.h0.shape[0]
         else:
@@ -153,9 +152,6 @@ class RNN(Layer):
                 outputs[:, cur_time, :] = self.cell.forward([inputs[:, cur_time, :], self.h0])
             else:
                 outputs[:, cur_time, :] = self.cell.forward([inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
-            self.kernel = self.cell.kernel
-            self.recurrent_kernel = self.cell.recurrent_kernel
-            self.bias = self.cell.bias
         #############################################################
         return outputs
 
@@ -170,7 +166,6 @@ class RNN(Layer):
         """
         #############################################################
         # code here
-        inputs[0][np.isnan(inputs[0])] = 0
         batch, time_steps, units = in_grads.shape
         _, _, in_features = inputs.shape
 
@@ -179,7 +174,10 @@ class RNN(Layer):
         dh_prev = np.zeros((batch, units))
         outputs = self.forward(inputs)
         for cur_time in reversed(range(time_steps)):
-            result = self.cell.backward(in_grads[:, cur_time, :] + dh_prev, [inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
+            if cur_time != 0:
+                result = self.cell.backward(in_grads[:, cur_time, :] + dh_prev, [inputs[:, cur_time, :], outputs[:, cur_time - 1, :]])
+            else:
+                result = self.cell.backward(in_grads[:, cur_time, :] + dh_prev, [inputs[:, cur_time, :], np.repeat(self.h0.reshape(1, -1), batch, axis=0)])
             out_grads[:, cur_time, :] = result[0]
             dh_prev = result[1]
             self.kernel_grad += self.cell.kernel_grad
@@ -304,7 +302,7 @@ class BidirectionalRNN(Layer):
         forward_outputs = self.forward_rnn.backward(in_grads_forward.reshape(batch, time_stamp, unit), inputs)
         backward_outputs = self.backward_rnn.backward(self._reverse_temporal_data(in_grads_backward.reshape(batch, time_stamp, unit), mask), inputs)
         #############################################################
-        return forward_outputs
+        return forward_outputs+backward_outputs
 
     def update(self, params):
         """Update parameters with new params
