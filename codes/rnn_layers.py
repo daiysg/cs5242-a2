@@ -61,7 +61,8 @@ class RNNCell(Layer):
         out_grads_h = np.dot(in_grads, self.recurrent_kernel.T)
         dx = np.dot(in_grads, self.kernel.T)
         x_nan_to_num = np.nan_to_num(inputs[0])
-        self.r_kernel_grad = np.dot(inputs[1].T, in_grads)
+        h_nan_to_num = np.nan_to_num(inputs[1])
+        self.r_kernel_grad = np.dot(h_nan_to_num.T, in_grads)
         self.kernel_grad = np.dot(x_nan_to_num.T, in_grads)
         self.b_grad = np.sum(in_grads, axis=0)
         out_grads = [dx, out_grads_h]
@@ -294,15 +295,12 @@ class BidirectionalRNN(Layer):
         #############################################################
         # code here
         mask = ~np.any(np.isnan(inputs), axis=2)
-        batch, time_stamp, double_unit = in_grads.shape
-        unit = int(double_unit / 2)
-        in_grads_array = np.reshape(in_grads,  batch * time_stamp * double_unit)
-        [in_grads_forward, in_grads_backward] = np.split(in_grads_array, 2)
-
-        forward_outputs = self.forward_rnn.backward(in_grads_forward.reshape(batch, time_stamp, unit), inputs)
-        backward_outputs = self.backward_rnn.backward(self._reverse_temporal_data(in_grads_backward.reshape(batch, time_stamp, unit), mask), inputs)
+        double_unit = in_grads.shape[2]
+        unit = int(double_unit/2)
+        forward_outputs = self.forward_rnn.backward(in_grads[:, :, :unit], inputs)
+        backward_outputs = self.backward_rnn.backward(self._reverse_temporal_data(in_grads[:, :, unit:], mask), self._reverse_temporal_data(inputs, mask))
         #############################################################
-        return forward_outputs+backward_outputs
+        return forward_outputs + self._reverse_temporal_data(backward_outputs, mask)
 
     def update(self, params):
         """Update parameters with new params
